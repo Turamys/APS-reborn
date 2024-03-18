@@ -1,145 +1,176 @@
 /* -----------------------------------------------------------------------------
 * Project Name   : Architectures of Processor Systems (APS) lab work
+* File           : tb_miriscv_alu.sv
 * Organization   : National Research University of Electronic Technology (MIET)
 * Department     : Institute of Microdevices and Control Systems
-* Author(s)      : Nikita Bulavin
-* Email(s)       : nekkit6@edu.miet.ru
+* Author(s)      : Daniil Strelkov
+* Email(s)       : 8190948@edu.miet.ru
 
-See https://github.com/MPSU/APS/blob/master/LICENSE file for licensing details.
+See LICENSE file for licensing details.
 * ------------------------------------------------------------------------------
 */
+
 module tb_rf_riscv();
 
-    logic        CLK;
-    logic [ 4:0] RA1;
-    logic [ 4:0] RA2;
-    logic [ 4:0] WA;
-    logic [31:0] WD;
-    logic        WE;
+logic        clk;
+logic [ 4:0] ra1;
+logic [ 4:0] ra2;
+logic [ 4:0] wa;
+logic [31:0] wd;
+logic        we;
 
-    logic [31:0] RD1;
-    logic [31:0] RD2;
-    logic [31:0] RD1ref;
-    logic [31:0] RD2ref;
+logic [31:0] rd1;
+logic [31:0] rd2;
+logic [31:0] rd1ref;
+logic [31:0] rd2ref;
 
-    rf_riscv DUT(
-        .clk_i         (CLK),
-        .read_addr1_i  (RA1),
-        .read_addr2_i  (RA2),
-        .write_addr_i  (WA ),
-        .write_data_i  (WD ),
-        .write_enable_i(WE ),
-        .read_data1_o  (RD1),
-        .read_data2_o  (RD2)
-    );
+string string_erorr;
 
-    rf_riscv_ref DUTref(
-        .clk_i         (CLK   ),
-        .read_addr1_i  (RA1   ),
-        .read_addr2_i  (RA2   ),
-        .write_addr_i  (WA    ),
-        .write_data_i  (WD    ),
-        .write_enable_i(WE    ),
-        .read_data1_o  (RD1ref),
-        .read_data2_o  (RD2ref)
-    );
+rf_riscv DUT(
+  .clk_i         (clk),
+  .read_addr1_i  (ra1),
+  .read_addr2_i  (ra2),
+  .write_addr_i  (wa ),
+  .write_data_i  (wd ),
+  .write_enable_i(we ),
+  .read_data1_o  (rd1),
+  .read_data2_o  (rd2)
+);
 
-    integer i, err_count = 0;
+rf_riscv_ref DUTref(
+  .clk_i         (clk   ),
+  .read_addr1_i  (ra1   ),
+  .read_addr2_i  (ra2   ),
+  .write_addr_i  (wa    ),
+  .write_data_i  (wd    ),
+  .write_enable_i(we    ),
+  .read_data1_o  (rd1ref),
+  .read_data2_o  (rd2ref)
+);
 
-    parameter CLK_FREQ_MHz   = 100;
-    parameter CLK_SEMI_PERIOD= 1e3/CLK_FREQ_MHz/2;
+integer err_cnt = 0;
 
-    parameter address_length = 32;
+initial clk = 0;
+always #5ns clk = ~clk;
 
-    initial CLK <= 0;
-    always begin
-        #CLK_SEMI_PERIOD CLK = ~CLK;
-        if (err_count >= 10) begin
-            $display("\n\nThe test was stopped due to errors"); $stop();
-        end
-    end
+initial begin
+  $display("Test has been started");
+  $display( "\n\n==========================\nCLICK THE BUTTON 'Run All'\n==========================\n"); $stop();
+  test_direct();
+  test_zero();
+  test_full();
+  $display("\nTest has been finished\nNumber of errors: %d\n", err_cnt);
+  $finish();
+end
 
-    initial begin
-      $timeformat (-9, 2, "ns");
-      $display( "\nStart test: \n\n==========================\nCLICK THE BUTTON 'Run All'\n==========================\n"); $stop();
-      RA1 = 'b1;
-      @(posedge CLK);
-        if (32'hx !== RD1) begin
-        $display("The register file should not be initialized by the $readmemh function");
-        err_count = err_count + 1;
-      end
-      @(posedge CLK);
-      DUT.rf_mem[32] = 32'd1;
-      if(DUT.rf_mem[32]=== 32'd1) begin
-        $display("invalid memory size");
-        err_count = err_count + 1;
-      end
-      @(posedge CLK);
-      WD <= 32'd1;
-      WA <= '0;
-      WE <= 1'b1;
-      @(posedge CLK);
-      WE  <= 'b0;
-      RA1 <= 'b0;
-      @(posedge CLK);
-      if( RD1 !== 'b0 ) begin
-        $display("time = %0t. invalid data when reading at address 0: RD1 = %h", $time, RD1);
-        err_count = err_count + 1;
-      end
-      @(posedge CLK);
-      //------initial
-      CLK <= 'b0;
-      RA1 <= 'b0;
-      RA2 <= 'b0;
-      WA  <= 'b0;
-      WD  <= 'b0;
-      WE  <= 'b0;
-      @(posedge CLK);
-      //----- reset
-      for( i = 1; i < address_length; i = i + 1) begin
-        @(posedge CLK);
-        WA <= i;
-        WD <= 'b0;
-        WE <= 'b1;
-      end
-      @(posedge CLK);
-      WA  <= 'b0;
-      WD  <= 'b1;
-      WE <= 'b1;
-      @(posedge CLK);
-      WE <= 'b0;
-      RA2  <= 'b0;
-      @(posedge CLK);
-      if( RD2 !== 'b0 )begin
-        $display("time = %0t. invalid data when reading at address 0: RD2 = %h", $time, RD2);
-        err_count = err_count + 1;
-      end
-      @(posedge CLK);
-      for( i = 1; i < address_length; i = i + 1) begin
-        @(posedge CLK);
-        WA <= i;
-        WD <= $urandom;
-        WE <= $urandom % 2;
-      end
-      @(posedge CLK);
-      WE <= 'b0;
-      for( i = 0; i < address_length; i = i + 1) begin
-        @(posedge CLK);
-        RA1  <= i;
-        RA2  <= address_length - (i + 1);
-        @(posedge CLK);
-        if(RD1ref !== RD1) begin
-            $display("time = %0t, address %h, RD1. Invalid data %h, correct data %h", $time, RA1, RD1, RD1ref);
-            err_count = err_count + 1;
-        end
-        if(RD2ref !== RD2) begin
-            $display("time = %0t, address %h, RD2. Invalid data %h, correct data %h", $time, RA2, RD2, RD2ref);
-            err_count = err_count + 1;
-        end
-      end
-      if( !err_count ) $display("\nregister file SUCCESS!!!\n");
-      $finish();
-    end
+task test_zero();
+  $display("test_zero");
+  we  <= 1;
+  wa  <= 0;
+  wd  <= 32'hffff_ffff;
+  @(posedge clk);
+  ra1 <= 0;
+  we  <= 0;
+  @(posedge clk);
+  ra2 <= 0;
+  @(posedge clk);
+endtask
+
+task test_direct();
+  string_erorr = "Error in write/read operations";
+  $display("test_direct");
+  we  <= 1;
+  wa  <= 1;
+  wd  <= 32'haaaa_aaaa;
+  @(posedge clk);
+  we  <= 1;
+  wa  <= 2;
+  wd  <= 32'h5555_5555;
+  @(posedge clk);
+  we  <= 0;
+  ra1 <= 1;
+  @(posedge clk);
+  ra2 <= 2;
+  @(posedge clk);
+  ra1 <= 2;
+  @(posedge clk);
+  ra1 <= 0;
+  ra2 <= 1;
+  @(posedge clk);
+  ra2 <= 0;
+  @(posedge clk);
+endtask
+
+task test_full();
+  we <= 1;
+  for (int i = 0; i < 32; i = i + 1) begin
+    wa <= i;
+    wd <= i;
+    @(posedge clk);
+  end
+  we  <= 0;
+  for (int i = 0; i < 32; i = i + 1) begin
+    ra1 <= i;
+    ra2 <= 31 - i;
+    @(posedge clk);
+  end
+endtask
+
+
+rf_check_RA1_0: assert property (
+  @(negedge clk) disable iff (ra1 !== 0)
+  rd1 === 'b0
+)
+else begin
+  err_cnt++;
+  $error("\ninvalid data when reading at address 0: \nRD1 = %h", rd1);
+  if(err_cnt == 10) begin
+    $display("\nTest has been stopped after 10 errors");
+    $stop();
+  end
+end
+
+rf_check_RA2_0: assert property (
+  @(negedge clk) disable iff (ra2 !== 0)
+  rd2 === 'b0
+)
+else begin
+  err_cnt++;
+  $error("\ninvalid data when reading at address 0: \nRD2 = %h", rd2);
+  if(err_cnt == 10) begin
+    $display("\nTest has been stopped after 10 errors");
+    $stop();
+  end
+end
+
+rf_check_RD1: assert property (
+  @(negedge clk) disable iff (ra1 === 0)
+  rd1ref === rd1 
+)
+else begin
+  err_cnt++;
+  $error("\nRD1\naddress = %h\nyour res : data = 0x%08h\nreference: data = 0x%08h, \nNote: Port 1 %s",
+          ra1, rd1, rd1ref, string_erorr);
+  if(err_cnt == 10) begin
+    $display("\nTest has been stopped after 10 errors");
+    $stop();
+  end
+end
+
+rf_check_RD2: assert property (
+  @(negedge clk) disable iff (ra2 === 0)
+  rd2ref === rd2
+)
+else begin
+  err_cnt++;
+  $error("\nRD2\naddress = %h\nyour res : data = 0x%08h\nreference: data = 0x%08h, \nNote: Port 2 %s",
+          ra2, rd2, rd2ref, string_erorr);      
+  if(err_cnt == 10) begin
+    $display("\nTest has been stopped after 10 errors");
+    $stop();
+  end
+end
+
 endmodule
 
 module rf_riscv_ref(
@@ -154,12 +185,13 @@ module rf_riscv_ref(
   output logic [31:0] read_data1_o,
   output logic [31:0] read_data2_o
 );
-logic [31:0] rf_mem [0:31];
 
 `define akjsdnnaskjdnreg  $clog2(128)
 `define cdyfguvhbjnmkreg  $clog2(`akjsdnnaskjdnreg)
 `define qwenklfsaklasdreg $clog2(`cdyfguvhbjnmkreg)
 `define asdasdhkjasdsareg (34 >> `cdyfguvhbjnmkreg)
+
+logic [(`asdasdhkjasdsareg<<`qwenklfsaklasdreg)+15:0] rf_mem [`asdasdhkjasdsareg*8];
 
 always_ff @(posedge clk_i) begin
     if(write_enable_i) rf_mem[write_addr_i[{1'b1,2'b0}:'hBA & 'h45]][{5{1'b1}}:{3'd7,2'b00}] <= write_data_i['h1f:'h1c];
@@ -187,6 +219,7 @@ always_comb begin
   default: read_data1_o = 'hBA & 'h45;
   endcase
 end
+
 always_comb begin
   case(read_addr2_i === ('hBA & 'h45))
   0: begin
@@ -202,5 +235,4 @@ always_comb begin
   default: read_data2_o = 'hBA & 'h45;
   endcase
 end
-
 endmodule
